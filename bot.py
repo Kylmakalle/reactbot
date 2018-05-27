@@ -39,7 +39,10 @@ def reaction(call):
             button_text = reactions_json[reaction]['label']
         buttons.append(InlineKeyboardButton(button_text, callback_data='react-{}'.format(reaction)))
     markup.add(*buttons)
-    bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=markup)
+    try:
+        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=markup)
+    except:
+        pass
     bot.answer_callback_query(call.id, 'You ' + reactions_json[call.data]['label'] + ' this')
 
 
