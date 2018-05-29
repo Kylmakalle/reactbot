@@ -54,13 +54,18 @@ def handle_photo(msg):
         InlineKeyboardButton('💔', callback_data='react-1')
     )
     caption = msg.caption or ''
-    name = '<a href="tg://user?id={}">{}</a>\n'.format(msg.from_user.id, msg.from_user.first_name)
+    # name = '<a href="tg://user?id={}">{}</a>\n'.format(msg.from_user.id, msg.from_user.first_name)
+    name = '<b>{}</b>'.format(msg.from_user.first_name)
+    if msg.reply_to_message:
+        reply_message_id = msg.reply_to_message.message_id
+    else:
+        reply_message_id = None
     if len(name) + len(caption) <= 200:
         bot.send_photo(msg.chat.id, msg.photo[-1].file_id, reply_markup=markup, caption=name + caption,
-                       parse_mode='HTML')
+                       parse_mode='HTML', reply_to_message_id=reply_message_id)
     else:
-        bot.send_message(msg.chat.id, name + caption, parse_mode='HTML')
-        bot.send_photo(msg.chat.id, msg.photo[-1].file_id, reply_markup=markup)
+        bot.send_message(msg.chat.id, name + caption, parse_mode='HTML', reply_to_message_id=reply_message_id)
+        bot.send_photo(msg.chat.id, msg.photo[-1].file_id, reply_markup=markup, reply_to_message_id=reply_message_id)
 
     try:
         bot.delete_message(msg.chat.id, msg.message_id)
