@@ -55,7 +55,7 @@ def handle_photo(msg):
     )
     caption = msg.caption or ''
     # name = '<a href="tg://user?id={}">{}</a>\n'.format(msg.from_user.id, msg.from_user.first_name)
-    name = '<b>{}</b>'.format(msg.from_user.first_name)
+    name = '<b>{}</b>\n'.format(msg.from_user.first_name)
     if msg.reply_to_message:
         reply_message_id = msg.reply_to_message.message_id
     else:
