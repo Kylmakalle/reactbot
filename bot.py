@@ -4,6 +4,9 @@ import redis
 import telebot
 import ujson
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+from collections import namedtuple
+
+UserIDs = namedtuple('UserIDs', ['id', 'counts'])
 
 token = os.environ['TELEGRAM_TOKEN']
 r = redis.from_url(os.environ.get("REDIS_URL"))
@@ -76,6 +79,114 @@ def handle_photo(msg):
 @bot.message_handler(commands=['ping'])
 def pong(msg):
     bot.send_message(msg.chat.id, 'Pong!', reply_to_message_id=msg.message_id)
+
+
+@bot.message_handler(commands=['stat', 'stats'])
+def stats(msg):
+    bot.send_chat_action(msg.chat.id, 'typing')
+    if msg.chat.type != 'supergroup' and not msg.chat.username:
+        bot.send_message(msg.chat.id, 'Stats available only for public supergroups with usernames!')
+        return
+
+    chat_id = str(msg.chat.id)
+    keys = r.keys(chat_id + '_*')
+    decoded_keys = []
+    decoded_values = []
+
+    data = []
+    for key in keys:
+        decoded_keys.append(key.decode('utf-8'))
+    values = r.mget(decoded_keys)
+    for value in values:
+        decoded_values.append(ujson.loads(value))
+
+    for key in range(len(decoded_keys)):
+        data.append({decoded_keys[key].replace(chat_id + '_', ''): decoded_values[key]})
+    if msg.reply_to_message:
+        # User stats
+        user_info = {'id': msg.reply_to_message.from_user.id, 'count_label_1': 0, 'count_label_2': 0}
+        try:
+            result = bot.get_chat_member(chat_id=chat_id, user_id=user_info['id'])
+            name = result.user.first_name
+            user_name = '<a href="tg://user?id={}">{}</a>'.format(user_info['id'], name)
+        except:
+            user_name = 'User {}'.format(user_info['id'])
+        text = '<b>Stats for</b> {}\n'.format(user_name)
+        for i in data:
+            message_id = next(iter(i))
+            label_1 = i[message_id][0]
+            label_2 = i[message_id][1]
+            if user_info['id'] in label_1['users']:
+                user_info['count_label_1'] += 1
+            if user_info['id'] in label_2['users']:
+                user_info['count_label_2'] += 2
+
+        text += '({} - {}, {} - {})'.format('❤️', user_info['count_label_1'], '💔',
+                                            user_info['count_label_2'])
+        bot.send_message(msg.chat.id, text, parse_mode='HTML', disable_web_page_preview=True)
+    else:
+        # 1. Top Users
+        users = {}
+        for i in data:
+            message_id = next(iter(i))
+            label_1 = i[message_id][0]
+            label_2 = i[message_id][1]
+            for user in label_1['users']:
+                if users.get(user):
+                    users[user]['count_label_1'] += 1
+                else:
+                    users[user] = {'count_label_1': 1, 'count_label_2': 0}
+            for user in label_2['users']:
+                if users.get(user):
+                    users[user]['count_label_2'] += 1
+                else:
+                    users[user] = {'count_label_1': 0, 'count_label_2': 1}
+        res = []
+        for key, value in users.items():
+            res.append(UserIDs(key, value.values()))
+
+        sorted_users = sorted(res, key=lambda x: sum(x.counts), reverse=True)
+
+        sorted_users = sorted_users[:10]
+        text = '<b>🔝 Top users:</b>'
+        text += '\n'
+
+        for usr in range(len(sorted_users)):
+            try:
+                result = bot.get_chat_member(chat_id=chat_id, user_id=sorted_users[usr].id)
+                name = result.user.first_name
+                user_name = '<a href="tg://user?id={}">{}</a>'.format(sorted_users[usr].id, name)
+            except:
+                user_name = 'User {}'.format(sorted_users[usr].id)
+            labels_list = list(sorted_users[usr].counts)
+            text += '<b>{}.</b> {} ({} - {}, {} - {})\n'.format(usr + 1, user_name, '❤️', labels_list[0], '💔',
+                                                                labels_list[1])
+
+        text += '\n'
+
+        text += '<b>🔥 Hot posts</b>:'
+        text += '\n'
+
+        # Top posts
+        sorted_labels_keys = sorted(data,
+                                    key=lambda x: sum(
+                                        [len(x[next(iter(x))][0]['users']), len(x[next(iter(x))][1]['users'])]),
+                                    reverse=True)
+        sorted_labels_keys = sorted_labels_keys[:10]
+
+        for key in range(len(sorted_labels_keys)):
+            message_id = next(iter(sorted_labels_keys[key]))
+            element = sorted_labels_keys[key][message_id]
+            label_1_count = len(element[0]['users'])
+            label_2_count = len(element[1]['users'])
+            text += '<b>{}.</b> <a href="https://t.me/{}/{}">Post {}</a> ({} - {}, {} - {})\n'.format(key + 1,
+                                                                                                      msg.chat.username,
+                                                                                                      message_id,
+                                                                                                      message_id, '❤️',
+                                                                                                      label_1_count,
+                                                                                                      '💔',
+                                                                                                      label_2_count)
+        bot.send_message(msg.chat.id, text, parse_mode='HTML', disable_web_page_preview=True)
 
 
 bot.skip_pending = True
