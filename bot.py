@@ -108,7 +108,8 @@ def stats(msg):
         try:
             result = bot.get_chat_member(chat_id=chat_id, user_id=user_info['id'])
             name = result.user.first_name
-            user_name = '<a href="tg://user?id={}">{}</a>'.format(user_info['id'], name)
+            # user_name = '<a href="tg://user?id={}">{}</a>'.format(user_info['id'], name)
+            user_name = name
         except:
             user_name = 'User {}'.format(user_info['id'])
         text = '<b>Stats for</b> {}\n'.format(user_name)
@@ -155,7 +156,8 @@ def stats(msg):
             try:
                 result = bot.get_chat_member(chat_id=chat_id, user_id=sorted_users[usr].id)
                 name = result.user.first_name
-                user_name = '<a href="tg://user?id={}">{}</a>'.format(sorted_users[usr].id, name)
+                # user_name = '<a href="tg://user?id={}">{}</a>'.format(sorted_users[usr].id, name)
+                user_name = name
             except:
                 user_name = 'User {}'.format(sorted_users[usr].id)
             labels_list = list(sorted_users[usr].counts)
