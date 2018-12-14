@@ -120,7 +120,7 @@ def stats(msg):
             if user_info['id'] in label_1['users']:
                 user_info['count_label_1'] += 1
             if user_info['id'] in label_2['users']:
-                user_info['count_label_2'] += 2
+                user_info['count_label_2'] += 1
 
         text += '({} - {}, {} - {})'.format('❤️', user_info['count_label_1'], '💔',
                                             user_info['count_label_2'])
