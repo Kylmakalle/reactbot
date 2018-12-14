@@ -81,6 +81,22 @@ def pong(msg):
     bot.send_message(msg.chat.id, 'Pong!', reply_to_message_id=msg.message_id)
 
 
+def tox_ratio(a, b):
+    try:
+        return round(((b - a) / b) * 100)
+    except ZeroDivisionError:
+        return 0
+
+
+def get_ratio_emoji(ratio):
+    if ratio == 0:
+        return '😐'
+    elif ratio > 0:
+        return '😖'
+    else:
+        return '😍'
+
+
 @bot.message_handler(commands=['stat', 'stats'])
 def stats(msg):
     bot.send_chat_action(msg.chat.id, 'typing')
@@ -121,9 +137,10 @@ def stats(msg):
                 user_info['count_label_1'] += 1
             if user_info['id'] in label_2['users']:
                 user_info['count_label_2'] += 1
-
-        text += '({} - {}, {} - {})'.format('❤️', user_info['count_label_1'], '💔',
-                                            user_info['count_label_2'])
+        ratio = tox_ratio(user_info['count_label_1'], user_info['count_label_2'])
+        text += '({} - {}, {} - {}, {} - {}%)'.format('❤️', user_info['count_label_1'], '💔',
+                                                      user_info['count_label_2'], get_ratio_emoji(ratio),
+                                                      abs(ratio))
         bot.send_message(msg.chat.id, text, parse_mode='HTML', disable_web_page_preview=True)
     else:
         # 1. Top Users
@@ -161,8 +178,12 @@ def stats(msg):
             except:
                 user_name = 'User {}'.format(sorted_users[usr].id)
             labels_list = list(sorted_users[usr].counts)
-            text += '<b>{}.</b> {} ({} - {}, {} - {})\n'.format(usr + 1, user_name, '❤️', labels_list[0], '💔',
-                                                                labels_list[1])
+            ratio = tox_ratio(labels_list[0], labels_list[1])
+
+            text += '<b>{}.</b> {} ({} - {}, {} - {}, {} - {}%)\n'.format(usr + 1, user_name, '❤️', labels_list[0],
+                                                                          '💔',
+                                                                          labels_list[1], get_ratio_emoji(ratio),
+                                                                          abs(ratio))
 
         text += '\n'
 
