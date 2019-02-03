@@ -310,17 +310,21 @@ def demographics(msg):
                 else:
                     bot.send_message(msg.chat.id, 'Can\'t find any faces on photo, sorry :(',
                                      reply_to_message_id=msg.message_id)
+                    bot.delete_message(msg.chat.id, msg.message_id)
                     return
             else:
                 bot.send_message(msg.chat.id, 'Unknown error, sorry :(', reply_to_message_id=msg.message_id)
+                bot.delete_message(msg.chat.id, msg.message_id)
                 return
         except Exception as e:
             print(e)
             bot.send_message(msg.chat.id, 'Unknown error, sorry :(', reply_to_message_id=msg.message_id)
+            bot.delete_message(msg.chat.id, msg.message_id)
             return
     bot.send_message(msg.chat.id,
                      text=text,
                      parse_mode='HTML', reply_to_message_id=msg.reply_to_message.message_id)
+    bot.delete_message(msg.chat.id, msg.message_id)
 
 
 bot.skip_pending = True
