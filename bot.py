@@ -2,6 +2,7 @@ import os
 
 import redis
 import telebot
+from telebot.apihelper import FILE_URL
 import ujson
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 from collections import namedtuple
@@ -9,8 +10,14 @@ from collections import namedtuple
 UserIDs = namedtuple('UserIDs', ['id', 'counts'])
 
 token = os.environ['TELEGRAM_TOKEN']
+CLARIFAI_TOKEN = os.environ['CLARIFAI_TOKEN']
 r = redis.from_url(os.environ.get("REDIS_URL"))
 bot = telebot.TeleBot(token)
+from clarifai.rest import ClarifaiApp
+from clarifai.rest import Image as ClImage
+
+app = ClarifaiApp(api_key=CLARIFAI_TOKEN)
+demogr_model = app.models.get('demographics')
 
 
 @bot.callback_query_handler(func=lambda call: call and call.message and call.data and call.data.startswith('react-'))
@@ -83,7 +90,7 @@ def pong(msg):
 
 def tox_ratio(a, b):
     try:
-        return round(((b - a) / b) * 100)
+        return round(((b - a) / (b + a)) * 100)
     except ZeroDivisionError:
         return 0
 
@@ -210,6 +217,110 @@ def stats(msg):
                                                                                                       '💔',
                                                                                                       label_2_count)
         bot.send_message(msg.chat.id, text, parse_mode='HTML', disable_web_page_preview=True)
+
+
+def parse_demogr_data(json_dict):
+    faces = []
+    for face in json_dict['outputs'][0]['data']['regions']:
+        genders = []
+        ages = []
+        cultures = []
+        ages.append(int(face['data']['face']['age_appearance']['concepts'][0]['name']))
+        for gender in face['data']['face']['gender_appearance']['concepts']:
+            genders.append({'name': gender['name'], 'value': gender['value']})
+        for culture in face['data']['face']['multicultural_appearance']['concepts']:
+            cultures.append({'name': culture['name'], 'value': culture['value']})
+        faces.append({'genders': genders, 'ages': ages, 'cultures': cultures})
+    return faces
+
+
+def get_gender_str(s):
+    return 'Male' if s == 'masculine' else 'Female'
+
+
+def get_gender_text(genders):
+    if len(genders) > 1:
+        if genders[0]['value'] >= 0.3 and genders[1]['value'] >= 0.3 \
+                or genders[1]['value'] >= 0.3 and genders[0]['value']:
+            return '{} ({:.0%}) | {} ({:.0%})'.format(get_gender_str(genders[0]['name']), genders[0]['value'],
+                                                      get_gender_str(genders[1]['name']), genders[1]['value'])
+        else:
+            if genders[0]['value'] > genders[1]['value']:
+                idx = 0
+            else:
+                idx = 1
+            return get_gender_str(genders[idx]['name'])
+    else:
+        return get_gender_str(genders[0]['name'])
+
+
+def get_nationality_text(cultures):
+    text = ''
+    important_cultures = []
+    for culture in cultures:
+        if culture['value'] >= 0.3:
+            important_cultures.append(culture)
+
+    for culture in important_cultures:
+        if text:
+            text += ' | '
+        if len(important_cultures) > 1:
+            text += '{} ({:.0%})'.format(culture['name'], culture['value'])
+        else:
+            text += culture['name']
+    return text
+
+
+def create_demogr_data_str(faces):
+    text = ''
+    for face in faces:
+        text += '<b>Gender:</b> ' + get_gender_text(face['genders'])
+        text += '\n'
+        text += '<b>Age:</b> ' + str(face['ages'][0])
+        if face['ages'][0] < 18:
+            text += ' ‼️🔞'
+        text += '\n'
+        text += '<b>Culture:</b> ' + get_nationality_text(face['cultures'])
+        text += '\n\n'
+    return text
+
+
+@bot.message_handler(commands=['demographics', 'age', 'gender', 'culture'])
+def demographics(msg):
+    bot.send_chat_action(msg.chat.id, 'typing')
+    if not msg.reply_to_message or not msg.reply_to_message.photo:
+        bot.send_message(chat_id=msg.chat.id, text='Reply to photo, please!', reply_to_message_id=msg.message_id)
+        return
+    file_id = msg.reply_to_message.photo[-1].file_id
+    faces = r.get('demogr:{}'.format(file_id))
+    if faces and False:
+        faces = ujson.loads(faces)
+        text = create_demogr_data_str(faces)
+    else:
+        img_file = bot.get_file(file_id)
+        img_url = FILE_URL.format(bot.token, img_file.file_path)
+        image = ClImage(url=img_url)
+        try:
+            prediction = demogr_model.predict([image])
+            if prediction['status']['code'] == 10000:
+                if prediction['outputs'][0]['data'].get('regions'):
+                    faces = parse_demogr_data(prediction)
+                    text = create_demogr_data_str(faces)
+                    r.set('demogr:{}'.format(file_id), ujson.dumps(faces))
+                else:
+                    bot.send_message(msg.chat.id, 'Can\'t find any faces on photo, sorry :(',
+                                     reply_to_message_id=msg.message_id)
+                    return
+            else:
+                bot.send_message(msg.chat.id, 'Unknown error, sorry :(', reply_to_message_id=msg.message_id)
+                return
+        except Exception as e:
+            print(e)
+            bot.send_message(msg.chat.id, 'Unknown error, sorry :(', reply_to_message_id=msg.message_id)
+            return
+    bot.send_message(msg.chat.id,
+                     text=text,
+                     parse_mode='HTML', reply_to_message_id=msg.reply_to_message.message_id)
 
 
 bot.skip_pending = True
