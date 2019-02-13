@@ -183,7 +183,7 @@ def stats(msg):
                 # user_name = '<a href="tg://user?id={}">{}</a>'.format(sorted_users[usr].id, name)
                 user_name = name
             except:
-                user_name = 'User {}'.format(sorted_users[usr].id)
+                user_name = '<a href="tg://user?id={}">{}</a>'.format(sorted_users[usr].id, 'User {}'.format(sorted_users[usr].id))
             labels_list = list(sorted_users[usr].counts)
             ratio = tox_ratio(labels_list[0], labels_list[1])
 
